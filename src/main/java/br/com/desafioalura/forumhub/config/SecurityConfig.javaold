@@ -1,0 +1,144 @@
+package br.com.desafioalura.forumhub.config;
+
+// src/main/java/com/example/demo/config/SecurityConfig.java
+
+import br.com.desafioalura.forumhub.security.JwtAuthenticationEntryPoint;
+import br.com.desafioalura.forumhub.security.JwtRequestFilter;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+import java.util.List;
+
+
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity
+public class SecurityConfig {
+
+    @Autowired
+    private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+
+    @Autowired
+    private JwtRequestFilter jwtRequestFilter;
+
+    @Autowired
+    private UserDetailsService jwtUserDetailsService; // Mantido para consistência, embora não usado diretamente aqui
+
+    // Define a cadeia de filtros de segurança
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(AbstractHttpConfigurer::disable) // Desabilita CSRF para autenticação baseada em token
+                .cors(Customizer.withDefaults()) // Habilita CORS com configurações padrão (ou personalizadas via corsConfigurationSource)
+                .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/auth/**","/auth/register","/auth/login").permitAll() // Permite acesso público a endpoints de autenticação
+                        .requestMatchers("/login","/register").permitAll()
+                        .requestMatchers("/public").permitAll() // Permite acesso público a /public
+                        .requestMatchers("/admin").hasRole("ADMIN") // Requer a função ADMIN para /admin
+                        .requestMatchers("/forum/**").authenticated() // Todos os endpoints do fórum exigem autenticação
+                        .requestMatchers("/courses").permitAll() // Permite acesso público aos cursos
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll() // Permite acesso público ao Swagger UI
+                        .anyRequest().authenticated() // Todas as outras solicitações exigem autenticação
+                )
+                .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint)) // Lida com exceções de autenticação
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)); // Garante que a sessão seja stateless
+
+        // Adiciona o filtro JWT antes do filtro de autenticação de nome de utilizador/senha
+        http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+
+    // Define um codificador de senha BCrypt
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    // Expõe AuthenticationManager como um Bean
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+        return authenticationConfiguration.getAuthenticationManager();
+    }
+
+    // Configuração CORS para permitir o frontend React e o novo frontend Spring Boot
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000", "http://localhost:8081")); // Permite o frontend React e o novo frontend Spring Boot
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type"));
+        configuration.setAllowCredentials(true); // Permite o envio de cookies de credenciais
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+}
+
+//
+//@Configuration
+//@EnableWebSecurity
+//public class SecurityConfig {
+//
+//    @Autowired
+//    private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+//
+//    @Autowired
+//    private JwtRequestFilter jwtRequestFilter;
+//
+//    @Autowired
+//    private UserDetailsService jwtUserDetailsService; // Mantido para consistência, embora não usado diretamente aqui
+//
+//    // Define a cadeia de filtros de segurança
+//    @Bean
+//    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+//        http
+//                .csrf(csrf -> csrf.disable()) // Desabilita CSRF para autenticação baseada em token
+//                .authorizeHttpRequests(authorize -> authorize
+//                        .requestMatchers("/auth/**").permitAll() // Permite acesso público a endpoints de autenticação
+//                        .requestMatchers("/public").permitAll() // Permite acesso público a /public
+//                        .requestMatchers("/admin").hasRole("ADMIN") // Requer a função ADMIN para /admin
+//                        .requestMatchers("/forum/**").authenticated() // Todos os endpoints do fórum exigem autenticação
+//                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll() // Permite acesso público ao Swagger UI
+//                        .anyRequest().authenticated() // Todas as outras solicitações exigem autenticação
+//                )
+//                .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint)) // Lida com exceções de autenticação
+//                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)); // Garante que a sessão seja stateless
+//
+//        // Adiciona o filtro JWT antes do filtro de autenticação de nome de utilizador/senha
+//        http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
+//
+//        return http.build();
+//    }
+//
+//    // Define um codificador de senha BCrypt
+//    @Bean
+//    public PasswordEncoder passwordEncoder() {
+//        return new BCryptPasswordEncoder();
+//    }
+//
+//    // Expõe AuthenticationManager como um Bean
+//    @Bean
+//    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+//        return authenticationConfiguration.getAuthenticationManager();
+//    }
+//}
